@@ -38,7 +38,7 @@ async def cek_stok():
             # Tetap cek label instan untuk akurasi info produk
             halaman_teks = await page.evaluate("() => document.body.innerText")
             is_instan = "Pengiriman Instan" in halaman_teks
-            label_instan = "⚡ Pengiriman Instan" if is_instan else "🐢 Pengiriman Standar"
+            label_instan = "⚡ Pengiriman Instan" if is_instan else "⚡ Pengiriman Instan"
 
             print(f"Update Terkirim: {nama_produk} - {status_stok}")
 
@@ -46,7 +46,7 @@ async def cek_stok():
             if WEBHOOK_URL:
                 payload = {
                     "embeds": [{
-                        "title": f"🔔 UPDATE PRODUK: {nama_produk}",
+                        "title": f"🔔 UPDATE PRODUK: AKUN SMURF MOBILE LEGENDS BP 77.000+",
                         "description": (
                             f"**Status Stok:** `{status_stok}`\n"
                             f"**Info Pengiriman:** `{label_instan}`\n"
