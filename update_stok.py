@@ -2,7 +2,9 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 import requests
+import re
 
+# Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
@@ -16,47 +18,63 @@ async def cek_stok():
         page = await context.new_page()
 
         try:
-            print("Membuka halaman...")
-            await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=90000)
-            
-            # Tunggu 25 detik agar semua JavaScript selesai loading
-            await page.wait_for_timeout(25000)
+            print("Membuka halaman Itemku...")
+            await page.goto(URL_PRODUK, wait_until="commit", timeout=90000)
+            await page.wait_for_timeout(20000) # Tunggu render maksimal
 
-            # --- AMBIL SCREENSHOT UNTUK BUKTI ---
-            await page.screenshot(path="bukti_bot.png")
+            # 1. Ambil Nama Produk
+            nama_produk = await page.title()
+            nama_produk = nama_produk.split('|')[0].strip()
 
-            # --- CARA SCAN SEMUA ELEMEN ---
+            # 2. Ambil Seluruh Teks Halaman untuk Filter
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            sisa_stok = "Tidak terdeteksi"
+            # 3. Logika Cek Stok (Tersedia/Habis)
+            # Kita cari kata 'Stok' atau cek apakah ada tombol 'Beli Sekarang'
+            match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
             
-            # Cek apakah ada kata "Terakhir" (seperti di gambar kamu)
-            if "Terakhir" in halaman_teks:
-                sisa_stok = "Terakhir (1)"
-            else:
-                # Cari pola angka yang biasanya ada di dekat tombol stok
-                import re
-                match = re.search(r"Stok[:\s]+(\d+)", halaman_teks, re.IGNORECASE)
-                if match:
-                    sisa_stok = match.group(1)
+            status_stok = "Stok Habis ❌"
+            warna_embed = 15158332 # Merah
+            
+            if match_stok:
+                sisa = match_stok.group(1)
+                status_stok = f"Tersedia ({sisa}) ✅"
+                warna_embed = 3066993 # Hijau
+            elif "Terakhir" in halaman_teks:
+                status_stok = "Tersedia (Terakhir/1) ⚠️"
+                warna_embed = 15105570 # Oranye
 
-            print(f"Hasil Akhir: {sisa_stok}")
+            # 4. Cek Status Penjual (Terakhir Online)
+            match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
+            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Tidak diketahui"
 
+            # 5. Cek Label Pengiriman Instan
+            is_instan = "Pengiriman Instan" in halaman_teks
+            label_instan = "⚡ Pengiriman Instan Terdeteksi" if is_instan else "🐢 Pengiriman Standar"
+
+            print(f"Update: {nama_produk} - {status_stok}")
+
+            # --- KIRIM KE DISCORD ---
             if WEBHOOK_URL:
-                is_urgent = "Terakhir" in sisa_stok or sisa_stok == "1"
                 payload = {
-                    "content": "@everyone 🚨 STATUS STOK!" if is_urgent else "📦 Pantau Stok",
                     "embeds": [{
-                        "title": "🛒 Laporan Stok Itemku",
-                        "description": f"**Status Stok:** `{sisa_stok}`\n\nJika tetap tidak terdeteksi, bot sudah mengambil screenshot untuk dicek manual.",
-                        "color": 15105570 if is_urgent else 3066993,
-                        "url": URL_PRODUK
+                        "title": f"🔔 UPDATE PRODUK: {nama_produk}",
+                        "description": (
+                            f"**Status Stok:** `{status_stok}`\n"
+                            f"**Info Pengiriman:** `{label_instan}`\n"
+                            f"**Status Penjual:** `{status_penjual}`\n\n"
+                            f"[Klik untuk Cek/Beli Produk]({URL_PRODUK})"
+                        ),
+                        "color": warna_embed,
+                        "footer": {"text": "Bot Monitor Itemku • Pengiriman Instan Aktif"}
                     }]
                 }
                 requests.post(WEBHOOK_URL, json=payload)
 
         except Exception as e:
             print(f"Error: {e}")
+            if WEBHOOK_URL and "Timeout" in str(e):
+                requests.post(WEBHOOK_URL, json={"content": "⚠️ Bot Timeout saat mengecek Itemku."})
         finally:
             await browser.close()
 
