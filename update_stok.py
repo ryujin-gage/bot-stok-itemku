@@ -3,6 +3,8 @@ import asyncio
 from playwright.async_api import async_playwright
 import requests
 import json
+from datetime import datetime
+import pytz
 
 # Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
@@ -22,6 +24,18 @@ async def cek_stok():
             print("Membuka halaman Itemku...")
             await page.goto(URL_PRODUK, wait_until="commit", timeout=120000)
             
+            # --- PENGATURAN WAKTU & HARI (WIB) ---
+            tz_jkt = pytz.timezone('Asia/Jakarta')
+            now = datetime.now(tz_jkt)
+            
+            # Mapping Nama Hari ke Bahasa Indonesia
+            hari_indo = {
+                "Monday": "Senin", "Tuesday": "Selasa", "Wednesday": "Rabu",
+                "Thursday": "Kamis", "Friday": "Jumat", "Saturday": "Sabtu", "Sunday": "Minggu"
+            }
+            nama_hari = hari_indo[now.strftime("%A")]
+            waktu_lengkap = f"{nama_hari}, {now.strftime('%d-%m-%Y %H:%M')} WIB"
+
             # --- DATA MANIPULASI ---
             status_stok = "Tersedia ✅" 
             warna_embed = 3066993 # Hijau
@@ -44,12 +58,14 @@ async def cek_stok():
                         ),
                         "color": warna_embed,
                         "image": {"url": URL_FOTO_PRODUK}, #
-                        "footer": {"text": "Bot Monitor Itemku • Auto-update tiap 12 jam"}
+                        "footer": {
+                            "text": f"Update: {waktu_lengkap} • Auto-Update"
+                        }
                     }]
                 }
 
                 requests.post(WEBHOOK_URL, json=payload)
-                print("Update Terkirim!")
+                print(f"Update Terkirim: {waktu_lengkap}")
 
         except Exception as e:
             print(f"Error: {e}")
