@@ -9,7 +9,7 @@ URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-b
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
 # SAYA GANTI KE LINK IMGUR AGAR TIDAK KOTAK ABU-ABU LAGI
-URL_FOTO_PRODUK = "https://i.imgur.com/8N4p9X8.png" 
+URL_FOTO_PRODUK = "https://ibb.co.com/pvXkDnpv" 
 
 async def cek_stok():
     async with async_playwright() as p:
