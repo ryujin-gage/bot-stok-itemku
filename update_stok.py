@@ -1,37 +1,39 @@
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import os
 
-# Link Produk Spesifik Kamu
+# Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
 def cek_stok():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-    }
+    # Menggunakan cloudscraper untuk melewati proteksi Cloudflare
+    scraper = cloudscraper.create_scraper()
+    
     try:
-        response = requests.get(URL_PRODUK, headers=headers, timeout=15)
+        response = scraper.get(URL_PRODUK)
+        if response.status_code != 200:
+            print(f"Gagal akses web (Status: {response.status_code})")
+            return
+
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Mencari teks yang mengandung kata 'Stok'
-        stok_label = soup.find(text=lambda t: "Stok" in t)
+        # Mencari teks "Stok" dengan cara baru (menghindari DeprecationWarning)
+        # Kita cari elemen yang mengandung kata 'Stok'
+        stok_element = soup.find(string=lambda t: "Stok" in t if t else False)
         
-        if stok_label:
-            info_stok = stok_label.strip()
-            pesan = {
-                "embeds": [{
-                    "title": "📦 Update Stok Itemku",
-                    "description": f"**Status:** {info_stok}\n[Klik Lihat Produk]({URL_PRODUK})",
-                    "color": 5814783
-                }]
-            }
-            requests.post(WEBHOOK_URL, json=pesan)
-            print("Berhasil kirim ke Discord")
+        if stok_element:
+            stok_teks = stok_element.strip()
+            pesan = f"📢 **Update Stok Itemku!**\n**Produk:** Akun Smurf Sultan\n**Status:** {stok_teks}\n**Link:** {URL_PRODUK}"
+            
+            # Kirim ke Discord
+            scraper.post(WEBHOOK_URL, json={"content": pesan})
+            print(f"Berhasil! Data ditemukan: {stok_teks}")
         else:
-            print("Teks stok tidak ditemukan")
+            print("Teks 'Stok' masih tidak ditemukan di halaman. Cek link atau struktur web.")
+            
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Terjadi error: {e}")
 
 if __name__ == "__main__":
     cek_stok()
