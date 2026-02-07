@@ -17,42 +17,40 @@ async def cek_stok():
 
         try:
             print("Membuka halaman...")
-            await page.goto(URL_PRODUK, wait_until="commit", timeout=90000)
+            await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=90000)
             
-            # Tunggu lebih lama agar JavaScript selesai merender angka stok
-            await page.wait_for_timeout(20000)
+            # Tunggu 25 detik agar semua JavaScript selesai loading
+            await page.wait_for_timeout(25000)
 
-            # --- TEKNIK SAPU JAGAT ---
+            # --- AMBIL SCREENSHOT UNTUK BUKTI ---
+            await page.screenshot(path="bukti_bot.png")
+
+            # --- CARA SCAN SEMUA ELEMEN ---
+            halaman_teks = await page.evaluate("() => document.body.innerText")
+            
             sisa_stok = "Tidak terdeteksi"
-
-            # 1. Coba ambil dari atribut 'value' kotak input (yang ada angka 1-nya)
-            input_elemen = page.locator("input.ant-input-number-input").first
-            if await input_elemen.is_visible():
-                val = await input_elemen.get_attribute("value")
-                if val: sisa_stok = val
-
-            # 2. Jika gagal, cari teks "Stok:" dan ambil kata setelahnya
-            if sisa_stok == "Tidak terdeteksi":
-                all_text = await page.evaluate("() => document.body.innerText")
-                if "Stok:" in all_text:
-                    # Ambil 10 karakter setelah kata "Stok:"
-                    index = all_text.find("Stok:")
-                    sisa_stok = all_text[index:index+20].replace("Stok:", "").strip().split('\n')[0]
-
-            # 3. Cek kata kunci "Terakhir"
-            if "Terakhir" in sisa_stok or "Terakhir" in (await page.content()):
+            
+            # Cek apakah ada kata "Terakhir" (seperti di gambar kamu)
+            if "Terakhir" in halaman_teks:
                 sisa_stok = "Terakhir (1)"
+            else:
+                # Cari pola angka yang biasanya ada di dekat tombol stok
+                import re
+                match = re.search(r"Stok[:\s]+(\d+)", halaman_teks, re.IGNORECASE)
+                if match:
+                    sisa_stok = match.group(1)
 
             print(f"Hasil Akhir: {sisa_stok}")
 
             if WEBHOOK_URL:
                 is_urgent = "Terakhir" in sisa_stok or sisa_stok == "1"
                 payload = {
-                    "content": "@everyone 🚨 STOK TIPIS!" if is_urgent else "📦 Update Stok",
+                    "content": "@everyone 🚨 STATUS STOK!" if is_urgent else "📦 Pantau Stok",
                     "embeds": [{
                         "title": "🛒 Laporan Stok Itemku",
-                        "description": f"**Sisa Stok:** `{sisa_stok}`\n\n[Cek Produk]({URL_PRODUK})",
-                        "color": 15105570 if is_urgent else 3066993
+                        "description": f"**Status Stok:** `{sisa_stok}`\n\nJika tetap tidak terdeteksi, bot sudah mengambil screenshot untuk dicek manual.",
+                        "color": 15105570 if is_urgent else 3066993,
+                        "url": URL_PRODUK
                     }]
                 }
                 requests.post(WEBHOOK_URL, json=payload)
