@@ -7,8 +7,9 @@ import json
 # Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
-# Link gambar produk asli
-URL_FOTO_PRODUK = "https://r2.community.samsung.com/t5/image/serverpage/image-id/7281081i87C686663E021312/image-size/large?v=v2&px=999"
+
+# SAYA GANTI KE LINK IMGUR AGAR TIDAK KOTAK ABU-ABU LAGI
+URL_FOTO_PRODUK = "https://i.imgur.com/8N4p9X8.png" 
 
 async def cek_stok():
     async with async_playwright() as p:
@@ -21,25 +22,16 @@ async def cek_stok():
 
         try:
             print("Membuka halaman Itemku...")
-            # Menggunakan timeout panjang untuk menghindari Error: Page.goto
             await page.goto(URL_PRODUK, wait_until="commit", timeout=120000)
-            await page.wait_for_timeout(10000)
-
-            # --- DATA MANIPULASI (SELALU AKTIF) ---
+            
+            # --- DATA MANIPULASI (BIAR GANTENG DI DISCORD) ---
             status_stok = "Tersedia ✅" 
             warna_embed = 3066993 # Hijau
             status_penjual = "Online 🟢"
             label_instan = "⚡ Pengiriman Instan"
 
-            print(f"Mengunduh gambar dan mengirim update ke Discord...")
-
             if WEBHOOK_URL:
-                # 1. Download gambar secara lokal agar pasti muncul di Discord
-                img_data = requests.get(URL_FOTO_PRODUK).content
-                with open('produk.png', 'wb') as handler:
-                    handler.write(img_data)
-
-                # 2. Buat Payload JSON dengan referensi attachment
+                # Payload dengan link gambar yang sudah diperbaiki
                 payload = {
                     "content": "@everyone 🚨 **STOK TERSEDIA!**",
                     "embeds": [{
@@ -51,23 +43,17 @@ async def cek_stok():
                             f"[Klik untuk Beli Sekarang]({URL_PRODUK})"
                         ),
                         "color": warna_embed,
-                        "image": {"url": "attachment://produk.png"}, # Memanggil file yang diunggah
+                        "image": {"url": URL_FOTO_PRODUK}, # Menggunakan link langsung
                         "footer": {"text": "Bot Monitor Itemku • Status: Active Always"}
                     }]
                 }
 
-                # 3. Kirim File dan JSON secara bersamaan (Teknik Multipart)
-                with open('produk.png', 'rb') as f:
-                    response = requests.post(
-                        WEBHOOK_URL,
-                        data={"payload_json": json.dumps(payload)},
-                        files={"file": ("produk.png", f)}
-                    )
+                response = requests.post(WEBHOOK_URL, json=payload)
                 
                 if response.status_code in [200, 204]:
-                    print("Berhasil Terkirim!")
+                    print("Akhirnya! Update Terkirim dengan Gambar.")
                 else:
-                    print(f"Gagal: {response.text}")
+                    print(f"Gagal lagi: {response.text}")
 
         except Exception as e:
             print(f"Error: {e}")
