@@ -2,9 +2,10 @@ name: Monitor Stok Itemku
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
-
+    # Berjalan setiap 12 jam (Jam 00:00 dan 12:00 UTC)
+    - cron: '0 */12 * * *'
+  workflow_dispatch: # Agar tetap bisa dijalankan manual
+  
 jobs:
   run-bot:
     runs-on: ubuntu-latest
