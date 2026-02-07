@@ -18,48 +18,44 @@ async def cek_stok():
 
         try:
             print("Membuka halaman Itemku...")
-            # Timeout ditingkatkan ke 2 menit untuk koneksi lambat
             await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=120000)
             
-            # JURUS AUTO-SCROLL: Menggulir halaman untuk memicu render elemen
-            print("Melakukan auto-scroll untuk memicu render...")
-            await page.evaluate("window.scrollBy(0, 600)")
+            # Auto-scroll untuk memicu render elemen
+            await page.evaluate("window.scrollBy(0, 500)")
             await page.wait_for_timeout(5000)
-            await page.evaluate("window.scrollBy(0, -200)") # Scroll naik sedikit
             
-            # Tunggu total 30 detik agar JavaScript stok selesai muat
+            # Tunggu JavaScript stok muat
             await page.wait_for_timeout(25000)
 
-            # Ambil data dasar
+            # Ambil Screenshot untuk dikirim ke Discord
+            screenshot_path = "cek_stok.png"
+            await page.screenshot(path=screenshot_path)
+
+            # Ambil Data
             nama_produk = await page.title()
             nama_produk = nama_produk.split('|')[0].strip()
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            # --- FILTERING DATA ---
-            # Cari Status Stok
+            # Filter Stok & Online
             match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
-            
-            # Cari Status Penjual
             match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
-            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Status Penjual: Gagal dimuat"
-
-            # Tentukan Status Stok & Warna Embed
+            
             status_stok = "Stok Habis ❌"
             warna_embed = 15158332 # Merah
             
             if match_stok:
-                sisa = match_stok.group(1)
-                status_stok = f"Tersedia ({sisa}) ✅"
+                status_stok = f"Tersedia ({match_stok.group(1)}) ✅"
                 warna_embed = 3066993 # Hijau
             elif "Terakhir" in halaman_teks:
                 status_stok = "Tersedia (Terakhir/1) ⚠️"
                 warna_embed = 15105570 # Oranye
 
-            # Cek Label Pengiriman Instan
+            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Status Penjual: Gagal dimuat"
             label_instan = "⚡ Pengiriman Instan" if "Pengiriman Instan" in halaman_teks else "🐢 Pengiriman Standar"
 
-            # --- KIRIM NOTIFIKASI ---
+            # --- KIRIM NOTIFIKASI + GAMBAR ---
             if WEBHOOK_URL:
+                # Kirim Pesan Embed
                 payload = {
                     "embeds": [{
                         "title": f"🔔 MONITOR: {nama_produk}",
@@ -70,16 +66,19 @@ async def cek_stok():
                             f"[Klik di Sini untuk Beli]({URL_PRODUK})"
                         ),
                         "color": warna_embed,
-                        "footer": {"text": "Update Otomatis via GitHub Actions"}
+                        "image": {"url": "attachment://cek_stok.png"},
+                        "footer": {"text": "Update Otomatis dengan Screenshot"}
                     }]
                 }
-                requests.post(WEBHOOK_URL, json=payload)
-                print(f"Update Berhasil Terkirim: {status_stok}")
+                
+                # Kirim file gambar menggunakan format multipart/form-data
+                with open(screenshot_path, 'rb') as f:
+                    requests.post(WEBHOOK_URL, data={"payload_json": asyncio.get_event_loop().run_in_executor(None, lambda: str(payload))}, files={"file": f})
+                
+                print(f"Berhasil: {status_stok} + Gambar Terkirim")
 
         except Exception as e:
-            print(f"Error detail: {e}")
-            if WEBHOOK_URL:
-                requests.post(WEBHOOK_URL, json={"content": f"⚠️ Bot Error: `{str(e)[:100]}`"})
+            print(f"Error: {e}")
         finally:
             await browser.close()
 
