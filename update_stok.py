@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import os
 
 # Konfigurasi
-URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
+URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
 def cek_stok():
