@@ -3,46 +3,50 @@ import asyncio
 from playwright.async_api import async_playwright
 import requests
 
-# Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
 async def cek_stok():
     async with async_playwright() as p:
-        # Jalankan browser (headless=True agar tidak muncul jendela)
+        # Gunakan mode 'stealth' sederhana dengan menyamar jadi Chrome Windows
         browser = await p.chromium.launch(headless=True)
-        # Gunakan User Agent manusia agar tidak dicurigai
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            viewport={'width': 1280, 'height': 720},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
 
         try:
-            print(f"Membuka halaman: {URL_PRODUK}")
-            await page.goto(URL_PRODUK, wait_until="networkidle", timeout=60000)
+            print(f"Membuka halaman...")
+            await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=60000)
+            
+            # Tunggu lebih lama agar Cloudflare selesai loading
+            await page.wait_for_timeout(10000)
 
-            # Tunggu 5 detik tambahan untuk jaga-jaga render JavaScript
-            await page.wait_for_timeout(5000)
+            # Debug: Ambil title halaman untuk cek apakah kita terjebak di Cloudflare
+            title = await page.title()
+            print(f"Title Halaman: {title}")
 
-            # Ambil semua teks dari halaman
-            body_text = await page.inner_text("body")
+            # Mencari elemen yang mengandung info stok (menggunakan selector teks)
+            # Kita coba cari elemen yang punya teks angka stok
+            stok_element = page.get_by_text("Stok", exact=False).first
+            
+            if await stok_element.is_visible():
+                teks_stok = await stok_element.inner_text()
+                print(f"BERHASIL! Ditemukan: {teks_stok}")
 
-            if "Stok" in body_text:
-                # Cari baris yang mengandung kata "Stok"
-                lines = [line for line in body_text.split('\n') if "Stok" in line]
-                stok_info = lines[0] if lines else "Stok ditemukan (detail tidak terbaca)"
-                
-                print(f"Ditemukan: {stok_info}")
-
-                # Kirim ke Discord
                 if WEBHOOK_URL:
-                    payload = {"content": f"📢 **Update Stok Itemku!**\n**Status:** {stok_info}\n**Link:** {URL_PRODUK}"}
-                    requests.post(WEBHOOK_URL, json=payload)
+                    msg = {"content": f"📢 **Update Stok!**\n**Info:** {teks_stok}\n**Link:** {URL_PRODUK}"}
+                    requests.post(WEBHOOK_URL, json=msg)
             else:
-                print("Teks 'Stok' tetap tidak ditemukan. Mungkin halaman berubah.")
+                print("Gagal menemukan elemen stok. Mencoba ambil screenshot debug...")
+                await page.screenshot(path="debug_screenshot.png")
+                # Jika title-nya "Just a moment...", berarti terblokir Cloudflare
+                if "Just a moment" in title:
+                    print("⚠️ Terdeteksi Cloudflare! Script diblokir.")
 
         except Exception as e:
-            print(f"Terjadi kesalahan: {e}")
+            print(f"Error: {e}")
         finally:
             await browser.close()
 
