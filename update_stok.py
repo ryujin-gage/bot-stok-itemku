@@ -19,22 +19,25 @@ async def cek_stok():
 
         try:
             print("Membuka halaman Itemku...")
+            # Menggunakan wait_until="commit" untuk menghindari timeout
             await page.goto(URL_PRODUK, wait_until="commit", timeout=90000)
-            await page.wait_for_timeout(20000) # Tunggu render maksimal
+            
+            # Tunggu render komponen utama agar data tidak 'Tidak diketahui'
+            await page.wait_for_timeout(20000)
 
-            # 1. Ambil Nama Produk
+            # 1. Ambil Nama Produk dari Judul Halaman
             nama_produk = await page.title()
             nama_produk = nama_produk.split('|')[0].strip()
 
-            # 2. Ambil Seluruh Teks Halaman untuk Filter
+            # 2. Ambil Seluruh Teks Halaman
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            # 3. Logika Cek Stok (Tersedia/Habis)
-            # Kita cari kata 'Stok' atau cek apakah ada tombol 'Beli Sekarang'
+            # 3. Logika Stok Otomatis (Tersedia vs Habis)
+            # Mencari kata 'Stok:' atau 'Terakhir'
             match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
             
             status_stok = "Stok Habis ❌"
-            warna_embed = 15158332 # Merah
+            warna_embed = 15158332 # Merah (Default Habis)
             
             if match_stok:
                 sisa = match_stok.group(1)
@@ -44,13 +47,14 @@ async def cek_stok():
                 status_stok = "Tersedia (Terakhir/1) ⚠️"
                 warna_embed = 15105570 # Oranye
 
-            # 4. Cek Status Penjual (Terakhir Online)
+            # 4. Ambil Status Penjual
             match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
             status_penjual = match_online.group(0).split('\n')[0] if match_online else "Tidak diketahui"
 
-            # 5. Cek Label Pengiriman Instan
+            # 5. Deteksi Pengiriman Instan
+            # Itemku biasanya menampilkan label khusus untuk instan
             is_instan = "Pengiriman Instan" in halaman_teks
-            label_instan = "⚡ Pengiriman Instan Terdeteksi" if is_instan else "🐢 Pengiriman Standar"
+            label_instan = "⚡ Pengiriman Instan" if is_instan else "🐢 Pengiriman Standar"
 
             print(f"Update: {nama_produk} - {status_stok}")
 
@@ -74,7 +78,7 @@ async def cek_stok():
         except Exception as e:
             print(f"Error: {e}")
             if WEBHOOK_URL and "Timeout" in str(e):
-                requests.post(WEBHOOK_URL, json={"content": "⚠️ Bot Timeout saat mengecek Itemku."})
+                requests.post(WEBHOOK_URL, json={"content": "⚠️ Bot Timeout saat mengakses Itemku."})
         finally:
             await browser.close()
 
