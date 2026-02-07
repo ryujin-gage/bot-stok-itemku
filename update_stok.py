@@ -7,8 +7,6 @@ import json
 # Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
-
-# SAYA GANTI KE LINK IMGUR AGAR TIDAK KOTAK ABU-ABU LAGI
 URL_FOTO_PRODUK = "https://i.ibb.co.com/TBhNXr5B/1000683c527-picsay-1.webp" 
 
 async def cek_stok():
@@ -24,36 +22,34 @@ async def cek_stok():
             print("Membuka halaman Itemku...")
             await page.goto(URL_PRODUK, wait_until="commit", timeout=120000)
             
-            # --- DATA MANIPULASI (BIAR GANTENG DI DISCORD) ---
+            # --- DATA MANIPULASI ---
             status_stok = "Tersedia ✅" 
             warna_embed = 3066993 # Hijau
             status_penjual = "Online 🟢"
             label_instan = "⚡ Pengiriman Instan"
 
             if WEBHOOK_URL:
-                # Payload dengan link gambar yang sudah diperbaiki
                 payload = {
                     "content": "@everyone 🚨 **STOK TERSEDIA!**",
                     "embeds": [{
                         "title": "🔔 UPDATE PRODUK: AKUN SMURF MOBILE LEGENDS BP 77.000+",
                         "description": (
                             f"**Status Stok:** `{status_stok}`\n"
-                            f"**Status Penjual:** `{status_penjual}`\n\n"
-                            f"**Info Pengiriman:** `{label_instan}`\n"
-                            f"[Klik untuk Beli Sekarang]({URL_PRODUK})"
+                            f"**Status Penjual:** `{status_penjual}`\n"
+                            f"**Info Pengiriman:** `{label_instan}`\n\n"
+                            f"**━━━━━━━━━━━━━━━━━━━━━━**\n"
+                            f"**↓↓ KLIK TOMBOL DI BAWAH UNTUK BELI ↓↓**\n"
+                            f"**[ 🛒 BELI SEKARANG KLIK DI SINI ]({URL_PRODUK})**\n"
+                            f"**━━━━━━━━━━━━━━━━━━━━━━**"
                         ),
                         "color": warna_embed,
-                        "image": {"url": URL_FOTO_PRODUK}, # Menggunakan link langsung
-                        "footer": {"text": "Bot Monitor Itemku • Status: Active Always"}
+                        "image": {"url": URL_FOTO_PRODUK}, #
+                        "footer": {"text": "Bot Monitor Itemku • Auto-update tiap 12 jam"}
                     }]
                 }
 
-                response = requests.post(WEBHOOK_URL, json=payload)
-                
-                if response.status_code in [200, 204]:
-                    print("Akhirnya! Update Terkirim dengan Gambar.")
-                else:
-                    print(f"Gagal lagi: {response.text}")
+                requests.post(WEBHOOK_URL, json=payload)
+                print("Update Terkirim!")
 
         except Exception as e:
             print(f"Error: {e}")
