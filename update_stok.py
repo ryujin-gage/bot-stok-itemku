@@ -7,6 +7,8 @@ import re
 # Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
+# URL Foto yang kamu berikan tadi
+URL_FOTO_PRODUK = "https://r2.community.samsung.com/t5/image/serverpage/image-id/7281081i87C686663E021312/image-size/large?v=v2&px=999"
 
 async def cek_stok():
     async with async_playwright() as p:
@@ -27,24 +29,19 @@ async def cek_stok():
             nama_produk = nama_produk.split('|')[0].strip()
 
             # --- MANIPULASI STATUS (SELALU AKTIF) ---
-            
-            # Stok dibuat selalu tersedia
             status_stok = "Tersedia ✅" 
             warna_embed = 3066993 # Hijau
-            
-            # Penjual dibuat selalu Online
             status_penjual = "Online 🟢"
 
-            # Tetap cek label instan untuk akurasi info produk
-            halaman_teks = await page.evaluate("() => document.body.innerText")
-            is_instan = "Pengiriman Instan" in halaman_teks
-            label_instan = "⚡ Pengiriman Instan" if is_instan else "⚡ Pengiriman Instan"
+            # Tetap cek label instan (Dibuat selalu kilat sesuai permintaan)
+            label_instan = "⚡ Pengiriman Instan"
 
             print(f"Update Terkirim: {nama_produk} - {status_stok}")
 
             # --- KIRIM KE DISCORD ---
             if WEBHOOK_URL:
                 payload = {
+                    "content": "@everyone 🚨 **STOK TERSEDIA!**", # Menambahkan Tag Everyone
                     "embeds": [{
                         "title": f"🔔 UPDATE PRODUK: AKUN SMURF MOBILE LEGENDS BP 77.000+",
                         "description": (
@@ -54,6 +51,7 @@ async def cek_stok():
                             f"[Klik untuk Beli Sekarang]({URL_PRODUK})"
                         ),
                         "color": warna_embed,
+                        "image": {"url": URL_FOTO_PRODUK}, # Menambahkan Foto ke Embed
                         "footer": {"text": "Bot Monitor Itemku • Status: Active Always"}
                     }]
                 }
@@ -61,7 +59,6 @@ async def cek_stok():
 
         except Exception as e:
             print(f"Error: {e}")
-            # Bot tidak mengirim pesan error ke Discord agar tidak mengganggu tampilan "Selalu Online"
         finally:
             await browser.close()
 
