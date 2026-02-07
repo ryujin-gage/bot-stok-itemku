@@ -2,6 +2,7 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 import requests
+import re
 
 URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
@@ -9,37 +10,50 @@ WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 async def cek_stok():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        # Pakai resolusi layar besar biar semua elemen muncul
         context = await browser.new_context(viewport={'width': 1920, 'height': 1080})
         page = await context.new_page()
 
         try:
             print("Membuka halaman...")
-            # Tunggu sampai benar-benar tidak ada aktivitas download lagi
             await page.goto(URL_PRODUK, wait_until="networkidle", timeout=60000)
-            
-            # Kasih jeda 10 detik buat render JavaScript
             await page.wait_for_timeout(10000)
 
-            # Ambil SELURUH teks yang terlihat di layar
+            # Ambil teks body
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            # Cek apakah ada kata "Stok" atau "Terakhir"
-            if "Terakhir" in halaman_teks or "Stok" in halaman_teks:
-                # Cari baris yang mengandung kata tersebut
-                baris_relevan = [b for b in halaman_teks.split('\n') if "Stok" in b or "Terakhir" in b]
-                hasil = baris_relevan[0].strip() if baris_relevan else "Stok Terdeteksi"
+            # --- LOGIKA PENCARIAN STOK ---
+            # Cari baris yang mengandung kata "Stok" (case insensitive)
+            garis_stok = [line for line in halaman_teks.split('\n') if "stok" in line.lower()]
+            
+            sisa_stok = "Tidak diketahui"
+            
+            if garis_stok:
+                # Ambil baris pertama yang ada kata stok-nya
+                teks_mentah = garis_stok[0] 
                 
-                print(f"HORE! Ketemu: {hasil}")
+                # Gunakan Regex untuk ambil angka atau kata "Terakhir" setelah kata "Stok"
+                # Sesuai gambar: "Stok: Terakhir" atau "Stok: 10"
+                match = re.search(r"Stok:\s*([\w\d]+)", teks_mentah, re.IGNORECASE)
+                if match:
+                    sisa_stok = match.group(1)
+            
+            # Kirim Notifikasi
+            print(f"Hasil Filter - Sisa Stok: {sisa_stok}")
+            
+            if WEBHOOK_URL:
+                # Jika stok "Terakhir", kita anggap sisa 1
+                emoji = "🚨" if sisa_stok.lower() == "terakhir" else "📦"
                 
-                if WEBHOOK_URL:
-                    requests.post(WEBHOOK_URL, json={
-                        "content": f"🎯 **STOK UPDATE!**\n**Status:** {hasil}\n**Link:** {URL_PRODUK}"
-                    })
-            else:
-                print("Waduh, masih belum kelihatan juga di teks body.")
-                # Kita coba paksa cari elemen angka 1 di kotak stok (sesuai gambarmu)
-                await page.screenshot(path="debug.png") # Simpan foto buat bukti
+                payload = {
+                    "content": f"@everyone" if sisa_stok.lower() == "terakhir" else "",
+                    "embeds": [{
+                        "title": f"{emoji} INFO STOK TERBARU",
+                        "description": f"**Sisa Stok:** `{sisa_stok}`\n**Link:** [Klik di Sini]({URL_PRODUK})",
+                        "color": 15105570 if sisa_stok.lower() == "terakhir" else 3066993,
+                        "footer": {"text": "Pantau terus sebelum ludes!"}
+                    }]
+                }
+                requests.post(WEBHOOK_URL, json=payload)
 
         except Exception as e:
             print(f"Error: {e}")
