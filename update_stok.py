@@ -1,39 +1,50 @@
-import cloudscraper
-from bs4 import BeautifulSoup
 import os
+import asyncio
+from playwright.async_api import async_playwright
+import requests
 
 # Konfigurasi
 URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
-def cek_stok():
-    # Menggunakan cloudscraper untuk melewati proteksi Cloudflare
-    scraper = cloudscraper.create_scraper()
-    
-    try:
-        response = scraper.get(URL_PRODUK)
-        if response.status_code != 200:
-            print(f"Gagal akses web (Status: {response.status_code})")
-            return
+async def cek_stok():
+    async with async_playwright() as p:
+        # Jalankan browser (headless=True agar tidak muncul jendela)
+        browser = await p.chromium.launch(headless=True)
+        # Gunakan User Agent manusia agar tidak dicurigai
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
 
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Mencari teks "Stok" dengan cara baru (menghindari DeprecationWarning)
-        # Kita cari elemen yang mengandung kata 'Stok'
-        stok_element = soup.find(string=lambda t: "Stok" in t if t else False)
-        
-        if stok_element:
-            stok_teks = stok_element.strip()
-            pesan = f"📢 **Update Stok Itemku!**\n**Produk:** Akun Smurf Sultan\n**Status:** {stok_teks}\n**Link:** {URL_PRODUK}"
-            
-            # Kirim ke Discord
-            scraper.post(WEBHOOK_URL, json={"content": pesan})
-            print(f"Berhasil! Data ditemukan: {stok_teks}")
-        else:
-            print("Teks 'Stok' masih tidak ditemukan di halaman. Cek link atau struktur web.")
-            
-    except Exception as e:
-        print(f"Terjadi error: {e}")
+        try:
+            print(f"Membuka halaman: {URL_PRODUK}")
+            await page.goto(URL_PRODUK, wait_until="networkidle", timeout=60000)
+
+            # Tunggu 5 detik tambahan untuk jaga-jaga render JavaScript
+            await page.wait_for_timeout(5000)
+
+            # Ambil semua teks dari halaman
+            body_text = await page.inner_text("body")
+
+            if "Stok" in body_text:
+                # Cari baris yang mengandung kata "Stok"
+                lines = [line for line in body_text.split('\n') if "Stok" in line]
+                stok_info = lines[0] if lines else "Stok ditemukan (detail tidak terbaca)"
+                
+                print(f"Ditemukan: {stok_info}")
+
+                # Kirim ke Discord
+                if WEBHOOK_URL:
+                    payload = {"content": f"📢 **Update Stok Itemku!**\n**Status:** {stok_info}\n**Link:** {URL_PRODUK}"}
+                    requests.post(WEBHOOK_URL, json=payload)
+            else:
+                print("Teks 'Stok' tetap tidak ditemukan. Mungkin halaman berubah.")
+
+        except Exception as e:
+            print(f"Terjadi kesalahan: {e}")
+        finally:
+            await browser.close()
 
 if __name__ == "__main__":
-    cek_stok()
+    asyncio.run(cek_stok())
