@@ -10,53 +10,55 @@ WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 async def cek_stok():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(viewport={'width': 1920, 'height': 1080})
+        context = await browser.new_context(
+            viewport={'width': 1280, 'height': 800},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
         page = await context.new_page()
 
         try:
             print("Membuka halaman...")
-            await page.goto(URL_PRODUK, wait_until="networkidle", timeout=60000)
-            await page.wait_for_timeout(10000)
+            # Menggunakan 'commit' agar tidak perlu menunggu seluruh iklan/tracker load (mencegah timeout)
+            await page.goto(URL_PRODUK, wait_until="commit", timeout=90000)
+            
+            # Tunggu manual agar konten utama muncul
+            await page.wait_for_timeout(15000)
 
-            # Ambil teks body
+            # Ambil semua teks dari halaman
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            # --- LOGIKA PENCARIAN STOK ---
-            # Cari baris yang mengandung kata "Stok" (case insensitive)
-            garis_stok = [line for line in halaman_teks.split('\n') if "stok" in line.lower()]
+            # --- LOGIKA PENYARINGAN STOK ---
+            # Kita cari kata 'Stok' yang diikuti angka atau kata 'Terakhir'
+            # Format di Itemku biasanya: "Stok: 10" atau "Stok: Terakhir"
+            match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
             
-            sisa_stok = "Tidak diketahui"
-            
-            if garis_stok:
-                # Ambil baris pertama yang ada kata stok-nya
-                teks_mentah = garis_stok[0] 
-                
-                # Gunakan Regex untuk ambil angka atau kata "Terakhir" setelah kata "Stok"
-                # Sesuai gambar: "Stok: Terakhir" atau "Stok: 10"
-                match = re.search(r"Stok:\s*([\w\d]+)", teks_mentah, re.IGNORECASE)
-                if match:
-                    sisa_stok = match.group(1)
-            
-            # Kirim Notifikasi
-            print(f"Hasil Filter - Sisa Stok: {sisa_stok}")
-            
+            sisa_stok = "Tidak terdeteksi"
+            if match_stok:
+                sisa_stok = match_stok.group(1)
+            elif "Terakhir" in halaman_teks:
+                # Jika regex gagal tapi ada kata 'Terakhir' dekat elemen stok
+                sisa_stok = "Terakhir (1)"
+
+            print(f"Hasil: {sisa_stok}")
+
             if WEBHOOK_URL:
-                # Jika stok "Terakhir", kita anggap sisa 1
-                emoji = "🚨" if sisa_stok.lower() == "terakhir" else "📦"
-                
+                is_urgent = sisa_stok.lower() in ["terakhir", "1"]
                 payload = {
-                    "content": f"@everyone" if sisa_stok.lower() == "terakhir" else "",
+                    "content": "@everyone 🔥 STOK MENIPIS!" if is_urgent else "📦 Update Stok Berkala",
                     "embeds": [{
-                        "title": f"{emoji} INFO STOK TERBARU",
-                        "description": f"**Sisa Stok:** `{sisa_stok}`\n**Link:** [Klik di Sini]({URL_PRODUK})",
-                        "color": 15105570 if sisa_stok.lower() == "terakhir" else 3066993,
-                        "footer": {"text": "Pantau terus sebelum ludes!"}
+                        "title": "🛒 Informasi Stok Itemku",
+                        "description": f"**Sisa Stok saat ini:** `{sisa_stok}`\n\n[Klik untuk Beli Sekarang]({URL_PRODUK})",
+                        "color": 15105570 if is_urgent else 3066993,
+                        "footer": {"text": "Gaskeun sebelum kehabisan!"}
                     }]
                 }
                 requests.post(WEBHOOK_URL, json=payload)
 
         except Exception as e:
             print(f"Error: {e}")
+            # Jika timeout tetap terjadi, kirim lapor ke Discord agar kamu tahu
+            if "Timeout" in str(e) and WEBHOOK_URL:
+                requests.post(WEBHOOK_URL, json={"content": "⚠️ Bot sedang sulit mengakses Itemku (Timeout). Akan dicoba lagi otomatis nanti."})
         finally:
             await browser.close()
 
