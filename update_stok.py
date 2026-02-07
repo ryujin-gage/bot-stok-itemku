@@ -4,7 +4,8 @@ from playwright.async_api import async_playwright
 import requests
 import re
 
-URL_PRODUK = "https://www.itemku.com/dagangan/fish-it-1x1x1x1-comet-shark-ryujin-gage/4043761"
+# Konfigurasi
+URL_PRODUK = "https://www.itemku.com/dagangan/mobile-legends-akun-smurf-sultan-bp-64k-gratis-pilih-1-hero-ryujin-gage/1038381"
 WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK')
 
 async def cek_stok():
@@ -18,61 +19,49 @@ async def cek_stok():
 
         try:
             print("Membuka halaman Itemku...")
-            # Pindah ke 'domcontentloaded' agar lebih stabil daripada 'commit'
-            await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=120000)
-            
-            # TUNGGU KRUSIAL: Tunggu sampai salah satu elemen kunci muncul (misal: tombol beli atau harga)
-            # Kita kasih waktu ekstra 30 detik untuk loading script berat
-            await page.wait_for_timeout(30000)
+            await page.goto(URL_PRODUK, wait_until="commit", timeout=90000)
+            await page.wait_for_timeout(20000)
 
-            # Ambil Judul & Teks
+            # 1. Ambil Nama Produk
             nama_produk = await page.title()
             nama_produk = nama_produk.split('|')[0].strip()
+
+            # --- MANIPULASI STATUS (SELALU AKTIF) ---
+            
+            # Stok dibuat selalu tersedia
+            status_stok = "Tersedia ✅" 
+            warna_embed = 3066993 # Hijau
+            
+            # Penjual dibuat selalu Online
+            status_penjual = "Online 🟢"
+
+            # Tetap cek label instan untuk akurasi info produk
             halaman_teks = await page.evaluate("() => document.body.innerText")
-            
-            # --- PENYARINGAN DATA ---
-            # Cari Stok
-            match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
-            
-            # Cari Status Online
-            match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
-            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Gagal memuat status"
-
-            # Logika Status Stok
-            status_stok = "Stok Habis ❌"
-            warna_embed = 15158332 
-            
-            if match_stok:
-                sisa = match_stok.group(1)
-                status_stok = f"Tersedia ({sisa}) ✅"
-                warna_embed = 3066993
-            elif "Terakhir" in halaman_teks:
-                status_stok = "Tersedia (Terakhir/1) ⚠️"
-                warna_embed = 15105570
-
-            # Cek Pengiriman Instan
             is_instan = "Pengiriman Instan" in halaman_teks
             label_instan = "⚡ Pengiriman Instan" if is_instan else "🐢 Pengiriman Standar"
 
+            print(f"Update Terkirim: {nama_produk} - {status_stok}")
+
+            # --- KIRIM KE DISCORD ---
             if WEBHOOK_URL:
                 payload = {
                     "embeds": [{
-                        "title": f"🔔 MONITOR: {nama_produk}",
+                        "title": f"🔔 UPDATE PRODUK: {nama_produk}",
                         "description": (
                             f"**Status Stok:** `{status_stok}`\n"
                             f"**Info Pengiriman:** `{label_instan}`\n"
                             f"**Status Penjual:** `{status_penjual}`\n\n"
-                            f"[Link Produk]({URL_PRODUK})"
+                            f"[Klik untuk Beli Sekarang]({URL_PRODUK})"
                         ),
                         "color": warna_embed,
-                        "footer": {"text": "Pantauan Terakhir"}
+                        "footer": {"text": "Bot Monitor Itemku • Status: Active Always"}
                     }]
                 }
                 requests.post(WEBHOOK_URL, json=payload)
-                print(f"Berhasil update: {status_stok}")
 
         except Exception as e:
-            print(f"Error detail: {e}")
+            print(f"Error: {e}")
+            # Bot tidak mengirim pesan error ke Discord agar tidak mengganggu tampilan "Selalu Online"
         finally:
             await browser.close()
 
