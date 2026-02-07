@@ -18,44 +18,43 @@ async def cek_stok():
 
         try:
             print("Membuka halaman Itemku...")
+            # Pindah ke 'domcontentloaded' agar lebih stabil daripada 'commit'
             await page.goto(URL_PRODUK, wait_until="domcontentloaded", timeout=120000)
             
-            # Auto-scroll untuk memicu render elemen
-            await page.evaluate("window.scrollBy(0, 500)")
-            await page.wait_for_timeout(5000)
-            
-            # Tunggu JavaScript stok muat
-            await page.wait_for_timeout(25000)
+            # TUNGGU KRUSIAL: Tunggu sampai salah satu elemen kunci muncul (misal: tombol beli atau harga)
+            # Kita kasih waktu ekstra 30 detik untuk loading script berat
+            await page.wait_for_timeout(30000)
 
-            # Ambil Screenshot untuk dikirim ke Discord
-            screenshot_path = "cek_stok.png"
-            await page.screenshot(path=screenshot_path)
-
-            # Ambil Data
+            # Ambil Judul & Teks
             nama_produk = await page.title()
             nama_produk = nama_produk.split('|')[0].strip()
             halaman_teks = await page.evaluate("() => document.body.innerText")
             
-            # Filter Stok & Online
+            # --- PENYARINGAN DATA ---
+            # Cari Stok
             match_stok = re.search(r"Stok:\s*([\w\d]+)", halaman_teks, re.IGNORECASE)
-            match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
             
+            # Cari Status Online
+            match_online = re.search(r"Terakhir online\s*(.*)", halaman_teks, re.IGNORECASE)
+            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Gagal memuat status"
+
+            # Logika Status Stok
             status_stok = "Stok Habis ❌"
-            warna_embed = 15158332 # Merah
+            warna_embed = 15158332 
             
             if match_stok:
-                status_stok = f"Tersedia ({match_stok.group(1)}) ✅"
-                warna_embed = 3066993 # Hijau
+                sisa = match_stok.group(1)
+                status_stok = f"Tersedia ({sisa}) ✅"
+                warna_embed = 3066993
             elif "Terakhir" in halaman_teks:
                 status_stok = "Tersedia (Terakhir/1) ⚠️"
-                warna_embed = 15105570 # Oranye
+                warna_embed = 15105570
 
-            status_penjual = match_online.group(0).split('\n')[0] if match_online else "Status Penjual: Gagal dimuat"
-            label_instan = "⚡ Pengiriman Instan" if "Pengiriman Instan" in halaman_teks else "🐢 Pengiriman Standar"
+            # Cek Pengiriman Instan
+            is_instan = "Pengiriman Instan" in halaman_teks
+            label_instan = "⚡ Pengiriman Instan" if is_instan else "🐢 Pengiriman Standar"
 
-            # --- KIRIM NOTIFIKASI + GAMBAR ---
             if WEBHOOK_URL:
-                # Kirim Pesan Embed
                 payload = {
                     "embeds": [{
                         "title": f"🔔 MONITOR: {nama_produk}",
@@ -63,22 +62,17 @@ async def cek_stok():
                             f"**Status Stok:** `{status_stok}`\n"
                             f"**Info Pengiriman:** `{label_instan}`\n"
                             f"**Status Penjual:** `{status_penjual}`\n\n"
-                            f"[Klik di Sini untuk Beli]({URL_PRODUK})"
+                            f"[Link Produk]({URL_PRODUK})"
                         ),
                         "color": warna_embed,
-                        "image": {"url": "attachment://cek_stok.png"},
-                        "footer": {"text": "Update Otomatis dengan Screenshot"}
+                        "footer": {"text": "Pantauan Terakhir"}
                     }]
                 }
-                
-                # Kirim file gambar menggunakan format multipart/form-data
-                with open(screenshot_path, 'rb') as f:
-                    requests.post(WEBHOOK_URL, data={"payload_json": asyncio.get_event_loop().run_in_executor(None, lambda: str(payload))}, files={"file": f})
-                
-                print(f"Berhasil: {status_stok} + Gambar Terkirim")
+                requests.post(WEBHOOK_URL, json=payload)
+                print(f"Berhasil update: {status_stok}")
 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error detail: {e}")
         finally:
             await browser.close()
 
